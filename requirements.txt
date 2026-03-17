@@ -5,6 +5,4 @@ plotly
 beautifulsoup4
 lxml
 python-pptx
-st-aggrid
 streamlit-plotly-events
-kaleido
