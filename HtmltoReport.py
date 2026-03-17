@@ -349,7 +349,7 @@ def export_ppt(view_df: pd.DataFrame, pie_fig, panel_fig, file_bytes: io.BytesIO
       #  if panel_fig is not None:
       #      panel_fig.write_image(panel_png, scale=2)
 
-        prs = Presentation()
+        #prs = Presentation()
 
         # Title slide
         s = prs.slides.add_slide(prs.slide_layouts[0])
