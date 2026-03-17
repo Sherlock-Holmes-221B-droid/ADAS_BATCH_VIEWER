@@ -341,13 +341,13 @@ def export_ppt(view_df: pd.DataFrame, pie_fig, panel_fig, file_bytes: io.BytesIO
     - All Passed (paginated) + All Failed (paginated)
     """
     # Save chart images using kaleido
-    with tempfile.TemporaryDirectory() as td:
-        pie_png   = os.path.join(td, "status.png")
-        panel_png = os.path.join(td, "panel.png")
-        if pie_fig is not None:
-            pie_fig.write_image(pie_png, scale=2)
-        if panel_fig is not None:
-            panel_fig.write_image(panel_png, scale=2)
+    #with tempfile.TemporaryDirectory() as td:
+     #   pie_png   = os.path.join(td, "status.png")
+     #   panel_png = os.path.join(td, "panel.png")
+     #   if pie_fig is not None:
+       #     pie_fig.write_image(pie_png, scale=2)
+      #  if panel_fig is not None:
+      #      panel_fig.write_image(panel_png, scale=2)
 
         prs = Presentation()
 
