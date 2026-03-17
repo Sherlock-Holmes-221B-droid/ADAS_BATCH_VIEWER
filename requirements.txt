@@ -8,3 +8,4 @@ python-pptx
 streamlit-plotly-events
 streamlit-aggrid
 kaleidoscope
+kaleido
