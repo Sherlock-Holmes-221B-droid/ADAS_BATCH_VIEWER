@@ -155,6 +155,8 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
 
     # Coerce numerics
     for c in df.columns:
-        df[c] = pd.to_numeric(df[c], errors="ignore")
+        if df[c].dtype == object:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+
 
     return df, {"mode": "auto-discovered"}
