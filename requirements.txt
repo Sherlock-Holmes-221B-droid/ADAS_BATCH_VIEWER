@@ -9,3 +9,4 @@ streamlit-plotly-events
 streamlit-aggrid
 kaleidoscope
 kaleido
+openpyxl
