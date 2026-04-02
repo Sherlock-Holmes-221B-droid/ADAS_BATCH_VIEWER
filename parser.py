@@ -1,6 +1,6 @@
 from __future__ import annotations
+
 import re
-import os
 from typing import Any, Dict, Tuple, Optional, List
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -9,12 +9,13 @@ from bs4 import BeautifulSoup
 # Utilities
 # ------------------------------------------------------------
 
-UNIT_REGEX = re.compile(r"([-+]?\d*\.?\d+)")
+_NUM_RE = re.compile(r"([-+]?\d*\.?\d+)")
 
-def parse_numeric(value: str) -> Optional[float]:
-    if value is None:
+def parse_numeric(val: Any) -> Optional[float]:
+    """Extract first numeric value from a cell (handles units)."""
+    if val is None:
         return None
-    m = UNIT_REGEX.search(str(value))
+    m = _NUM_RE.search(str(val))
     if not m:
         return None
     try:
@@ -22,21 +23,23 @@ def parse_numeric(value: str) -> Optional[float]:
     except Exception:
         return None
 
-def norm(s: str) -> str:
-    return s.lower().replace(" ", "_")
+
+def normalize(name: str) -> str:
+    return name.lower().replace(" ", "_")
+
 
 # ------------------------------------------------------------
-# Role inference
+# Semantic role inference (NOT canonical columns)
 # ------------------------------------------------------------
 
 def infer_role(name: str) -> str:
-    n = norm(name)
+    n = normalize(name)
 
     if any(k in n for k in ["speed", "velocity", "v_"]):
         return "speed"
     if any(k in n for k in ["overlap", "offset", "%"]):
         return "overlap"
-    if any(k in n for k in ["impact"]):
+    if "impact" in n:
         return "severity"
     if any(k in n for k in ["stop", "distance"]):
         return "distance"
@@ -44,6 +47,7 @@ def infer_role(name: str) -> str:
         return "timing"
 
     return "other"
+
 
 # ------------------------------------------------------------
 # Core parser
@@ -62,15 +66,21 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
 
         scenario_name = title.replace("Scenario :", "").strip()
 
-        # ---------------- Stats ----------------
-        stats = {}
+        # ---------------- Simulation Infos ----------------
+        stats: Dict[str, Optional[str]] = {}
+        exec_status = None
+
         stats_tbl = h2.find_next("table", class_="stats")
         if stats_tbl:
-            tds = [td.get_text(strip=True) for td in stats_tbl.find_all("td")]
-            for i in range(0, len(tds), 2):
-                stats[tds[i]] = tds[i + 1] if i + 1 < len(tds) else None
+            cells = [td.get_text(strip=True) for td in stats_tbl.find_all("td")]
+            for i in range(0, len(cells), 2):
+                key = cells[i]
+                val = cells[i + 1] if i + 1 < len(cells) else None
+                stats[key] = val
+                if key == "Execution Status":
+                    exec_status = val
 
-        # ---------------- Inputs ----------------
+        # ---------------- Input Parameters ----------------
         inputs: Dict[str, Optional[float]] = {}
         roles: Dict[str, str] = {}
 
@@ -84,24 +94,75 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
                     inputs[name] = val
                     roles[name] = infer_role(name)
 
-        # ---------------- Outputs ----------------
-        outputs: Dict[str, Optional[float]] = {}
+        def pick_input(role: str) -> Optional[float]:
+            for k, v in inputs.items():
+                if roles.get(k) == role and v is not None:
+                    return v
+            return None
 
-        out_tbl = h2.find_next("table", class_="outputs")
-        if out_tbl:
-            for tr in out_tbl.find_all("tr"):
+        ego_speed = pick_input("speed")
+        overlap = pick_input("overlap")
+
+        # ---------------- Output Parameters ----------------
+        outs: Dict[str, Optional[float]] = {}
+        outs_tbl = h2.find_next("table", class_="outputs")
+        if outs_tbl:
+            for tr in outs_tbl.find_all("tr"):
                 tds = tr.find_all("td")
                 if len(tds) == 2:
-                    name = tds[0].get_text(strip=True)
-                    val = parse_numeric(tds[1].get_text(strip=True))
-                    outputs[name] = val
-                    roles[name] = infer_role(name)
+                    k = tds[0].get_text(strip=True)
+                    v = parse_numeric(tds[1].get_text(strip=True))
+                    outs[k] = v
+                    roles[k] = infer_role(k)
+
+        # --------------------------------------------------
+        # ✅ AUTHORITATIVE OUTPUTS (same as old parser)
+        # --------------------------------------------------
+
+        impact_speed = None
+        stop_distance = None
+        t_aeb = None
+        aeb_activation = None
+        result_code = None
+
+        if outs:
+            impact_speed = outs.get("Out_Speed_Impact")
+            stop_distance = outs.get("Out_Stop_Distance")
+            t_aeb = outs.get("Out_T_AEB")
+            aeb_activation = outs.get("Out_Scenario_AEB_Activation")
+            result_code = outs.get("Out_Scenario_Result")
+
+        # --------------------------------------------------
+        # 🔁 Fallback for new HTML formats (inference-based)
+        # --------------------------------------------------
+
+        if impact_speed is None:
+            impact_speed = next(
+                (v for k, v in outs.items()
+                 if "impact_speed" in normalize(k) and v is not None),
+                None
+            )
+
+        if stop_distance is None:
+            stop_distance = next(
+                (v for k, v in outs.items()
+                 if "stop_distance" in normalize(k) and v is not None),
+                None
+            )
+
+        if t_aeb is None:
+            t_aeb = next(
+                (v for k, v in outs.items()
+                 if normalize(k) == "t_aeb" and v is not None),
+                None
+            )
 
         # ---------------- Criteria → Status ----------------
         status = "Unknown"
+
         crit_tbl = h2.find_next("table", class_="criteria")
         if crit_tbl:
-            dot = crit_tbl.find("div", class_=re.compile(r"dot_"))
+            dot = crit_tbl.find("div", class_=re.compile(r"^dot_"))
             if dot:
                 cls = " ".join(dot.get("class", []))
                 if "succeed" in cls:
@@ -111,35 +172,35 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
                 else:
                     status = "Error"
 
-        # ---------------- Role resolution ----------------
-        def pick(role):
-            for k, r in roles.items():
-                if r == role:
-                    return inputs.get(k) or outputs.get(k)
-            return None
+        if exec_status and "fail" in exec_status.lower() and status != "Fail":
+            status = "Error"
 
-        rec = {
+        state = status if status in ("Pass", "Fail") else "Error"
+
+        # ---------------- Record ----------------
+        rec: Dict[str, Any] = {
             "scenario_name": scenario_name,
             "status": status,
-            "state": status if status in ("Pass", "Fail") else "Error",
-            "pass_flag": status == "Pass",
+            "state": state,
+            "pass_flag": (status == "Pass"),
 
-            # Dashboard‑expected canonical fields
-            "ego_speed": pick("speed"),
-            "overlap": pick("overlap"),
-            "impact_speed": pick("severity"),
-            "stop_distance": pick("distance"),
-            "t_aeb": pick("timing"),
+            "ego_speed": ego_speed,
+            "overlap": overlap,
 
-            # Metadata
+            "impact_speed": impact_speed,
+            "stop_distance": stop_distance,
+            "t_aeb": t_aeb,
+            "aeb_activation": aeb_activation,
+            "result_code": result_code,
+
             "date": stats.get("Date"),
             "real_duration": parse_numeric(stats.get("Real duration")),
             "real_time_ratio": parse_numeric(stats.get("Real time ratio")),
             "sim_duration": parse_numeric(stats.get("Simulated duration")),
         }
 
-        # Preserve ALL raw fields
-        for d in (inputs, outputs):
+        # Preserve all raw fields
+        for d in (inputs, outs):
             for k, v in d.items():
                 if k not in rec:
                     rec[k] = v
@@ -148,15 +209,22 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
 
     df = pd.DataFrame(rows)
 
-    # Ensure columns always exist
-    for c in ["ego_speed", "overlap", "impact_speed", "stop_distance", "t_aeb"]:
-        if c not in df.columns:
-            df[c] = None
+    # Ensure dashboard-required columns always exist
+    for col in [
+        "ego_speed", "overlap",
+        "impact_speed", "stop_distance", "t_aeb",
+        "aeb_activation", "result_code",
+    ]:
+        if col not in df.columns:
+            df[col] = None
 
-    # Coerce numerics
+    # Pandas 2.x safe numeric coercion
     for c in df.columns:
-        if df[c].dtype == object:
+        if df[c].dtype == object and c not in ("scenario_name", "status", "state", "date"):
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    df["pass_flag"] = df["pass_flag"].fillna(False).astype(bool)
+    df["status"] = df["status"].fillna("Unknown")
+    df["state"] = df["state"].fillna("Error")
 
-    return df, {"mode": "auto-discovered"}
+    return df, {"mode": "authoritative + inferred"}
