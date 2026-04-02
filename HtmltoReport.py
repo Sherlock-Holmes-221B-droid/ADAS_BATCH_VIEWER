@@ -21,11 +21,17 @@ import math
 import json
 import tempfile
 from typing import Optional, Tuple, List, Dict
+import plotly.io as pio
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
+
+
+pio.kaleido.scope.default_width = 1200
+pio.kaleido.scope.default_height = 600
+pio.kaleido.scope.default_scale = 2
 
 # Optional grid; gracefully fall back if missing or if component errors out
 USE_AGGRID = True
@@ -345,7 +351,13 @@ def export_ppt(view_df: pd.DataFrame, pie_fig, panel_fig, file_bytes: io.BytesIO
         pie_png   = os.path.join(td, "status.png")
         panel_png = os.path.join(td, "panel.png")
         if pie_fig is not None:
-            pie_fig.write_image(pie_png, scale=2)
+            try:
+                pie_fig.write_image(pie_png, engine="kaleido")
+            except Exception as ex:
+                raise RuntimeError(
+                    "Plotly image export failed. "
+                    "This is usually due to Kaleido/Chromium issues on Python 3.12."
+                ) from ex            
         if panel_fig is not None:
             panel_fig.write_image(panel_png, scale=2)
 
@@ -668,22 +680,22 @@ if uploaded:
                 USE_AGGRID_LOCAL = False
 
             if not USE_AGGRID_LOCAL:
-            
-                # ---- CLOUD-SAFE fallback (NO pandas Styler) ----
+                # Streamlit Cloud-safe fallback (NO pandas Styler)
                 table_view = table.copy()
-            
-                # Drop empty columns/rows (Arrow-safe)
+
+                # Drop empty rows/columns (Arrow-safe)
                 table_view = table_view.dropna(axis=1, how="all")
                 table_view = table_view.dropna(axis=0, how="all")
-            
-                # Remove duplicate columns (CRITICAL for Streamlit Cloud)
+
+                # Remove duplicate columns (CRITICAL for Cloud)
                 table_view = table_view.loc[:, ~table_view.columns.duplicated()]
-            
+
                 st.dataframe(
                     table_view,
                     use_container_width=True,
                     hide_index=True
                 )
+
             
 
     # ---- Export PPT ----
