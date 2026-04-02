@@ -65,6 +65,10 @@ COLOR_UNK  = "#9E9E9E"  # gray (used for 'Error' or unknown)
 
 
 # -------------------- HELPERS --------------------
+def is_streamlit_cloud() -> bool:
+    # Streamlit Cloud sets this env var
+    return os.environ.get("STREAMLIT_RUNTIME_ENV") == "cloud"
+
 def color_for_status(s: str) -> str:
     if s == "Pass": return COLOR_PASS
     if s == "Fail": return COLOR_FAIL
@@ -645,7 +649,7 @@ if uploaded:
 
     # ---- All Scenarios Table (robust + stays visible) ----
     st.subheader("All Scenarios")
-    all_ph = st.container()   # fixed placeholder so it persists after clicks
+    all_ph = st.container()
 
     with all_ph:
         show_cols = [c for c in [
@@ -653,41 +657,17 @@ if uploaded:
             "impact_speed", "stop_distance", "t_aeb", "aeb_activation",
             "result_code", "date"
         ] if c in view.columns]
-        table = view[show_cols]
+
+        table = view[show_cols].copy()
 
         if table.empty:
             st.info("No rows to display for the current filters.")
         else:
-            if USE_AGGRID:
-                try:
-                    g2 = GridOptionsBuilder.from_dataframe(table)
-                    g2.configure_default_column(filter=True, sortable=True, resizable=True)
-                    g2.configure_selection("single")
-                    AgGrid(
-                        table,
-                        gridOptions=g2.build(),
-                        update_mode=GridUpdateMode.NO_UPDATE,
-                        height=360,
-                        fit_columns_on_grid_load=True,
-                        key="all_scenarios_grid"   # stable key
-                    )
-                except Exception as ex:
-                    st.warning(f"AgGrid error ({ex}). Falling back to basic table.")
-                    USE_AGGRID_LOCAL = False
-                else:
-                    USE_AGGRID_LOCAL = True
-            else:
-                USE_AGGRID_LOCAL = False
-
-            if not USE_AGGRID_LOCAL:
-                # Streamlit Cloud-safe fallback (NO pandas Styler)
+            # ---------- FORCE cloud-safe path ----------
+            if is_streamlit_cloud() or not USE_AGGRID:
                 table_view = table.copy()
-
-                # Drop empty rows/columns (Arrow-safe)
                 table_view = table_view.dropna(axis=1, how="all")
                 table_view = table_view.dropna(axis=0, how="all")
-
-                # Remove duplicate columns (CRITICAL for Cloud)
                 table_view = table_view.loc[:, ~table_view.columns.duplicated()]
 
                 st.dataframe(
@@ -696,7 +676,21 @@ if uploaded:
                     hide_index=True
                 )
 
-            
+            # ---------- Local AgGrid path ----------
+            else:
+                g2 = GridOptionsBuilder.from_dataframe(table)
+                g2.configure_default_column(filter=True, sortable=True, resizable=True)
+                g2.configure_selection("single")
+
+                AgGrid(
+                    table,
+                    gridOptions=g2.build(),
+                    update_mode=GridUpdateMode.NO_UPDATE,
+                    height=360,
+                    fit_columns_on_grid_load=True,
+                    key="all_scenarios_grid"
+                )    
+
 
     # ---- Export PPT ----
     st.subheader("Export")
