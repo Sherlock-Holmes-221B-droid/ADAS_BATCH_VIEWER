@@ -8,6 +8,6 @@
 	"Param_Test_V_Lat": "m/s",
 	"Param_DTLE": "m",
 	"stop_distance": "m",
-	"Tgt_Speed" : "m/s"
+	"Tgt_Speed" : "kmph"
   }
 }
