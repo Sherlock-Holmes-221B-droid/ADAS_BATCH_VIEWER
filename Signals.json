@@ -1,13 +1,15 @@
 {
   "tile_parameters": ["ego_speed", "overlap", "impact_speed"],
   "units": {
-    "ego_speed": " km/h",
+    "ego_speed": " kmph",
     "overlap": " %",
     "impact_speed": " m/s",
     "t_aeb": " s",
 	"Param_Test_V_Lat": "m/s",
 	"Param_DTLE": "m",
 	"stop_distance": "m",
-	"Tgt_Speed" : "kmph"
+	"Tgt_Speed" : " kmph",
+	"TTC_AEB" : " s",
+	"TTC_FCW" : " s"
   }
 }
