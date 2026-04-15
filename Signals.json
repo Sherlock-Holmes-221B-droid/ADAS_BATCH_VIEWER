@@ -1,9 +1,9 @@
 {
-  "tile_parameters": ["ego_speed", "overlap", "impact_speed"],
+  "tile_parameters": ["ego_speed", "overlap", "impact_speed","stop_distance"],
   "units": {
     "ego_speed": " kmph",
     "overlap": " %",
-    "impact_speed": " m/s",
+    "impact_speed": " kmph",
     "t_aeb": " s",
 	"Param_Test_V_Lat": "m/s",
 	"Param_DTLE": "m",
