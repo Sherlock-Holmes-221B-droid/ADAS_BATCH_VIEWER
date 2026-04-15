@@ -609,7 +609,7 @@ if uploaded:
         with cA:
             tile_cols = st.slider("Tile columns", 4, 20, 7, step=1)
         with cB:
-            tile_size = st.slider("Tile size", 60, 120, 82, step=2)
+            tile_size = st.slider("Tile size", 60, 120, 100, step=2)
         sel_font_px = st.slider("Selected info font size", 10, 32, 20, step=1)
 
         st.markdown("**Tile parameters (top-to-bottom lines)**")
