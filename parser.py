@@ -182,8 +182,8 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
             )
 
         # ---------------- Criteria → Status ----------------
-        #status = "Unknown"
-        status = _extract_dot_status(li_tag)
+        status = "Unknown"
+        #status = _extract_dot_status(li_tag)
 
         crit_tbl = h2.find_next("table", class_="criteria")
         if crit_tbl:
@@ -194,7 +194,7 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
                     status = "Pass"
                 elif "failed" in cls:
                     status = "Fail"
-                elif "dot_mixed" in classes:
+                elif "dot_mixed" in cls:
                     status = "Mixed"
                 else:
                     status = "Error"
@@ -202,7 +202,7 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         if exec_status and "fail" in exec_status.lower() and status != "Fail":
             status = "Error"
 
-        state = status if status in ("Pass", "Fail") else "Error"
+        state = status if status in ("Pass", "Fail", "Mixed") else "Error"
 
         # ---------------- Record ----------------
         rec: Dict[str, Any] = {
