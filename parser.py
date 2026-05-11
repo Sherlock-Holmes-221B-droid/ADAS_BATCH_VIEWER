@@ -11,6 +11,30 @@ from bs4 import BeautifulSoup
 
 _NUM_RE = re.compile(r"([-+]?\d*\.?\d+)")
 
+def _extract_dot_status(tag) -> str:
+    """
+    Extract status from dot_* class in HTML
+    """
+    if tag is None:
+        return "Error"
+
+    dot = tag.find("div", class_=True)
+    if dot is None:
+        return "Error"
+
+    classes = " ".join(dot.get("class", []))
+
+    if "dot_succeed" in classes:
+        return "Pass"
+    elif "dot_failed" in classes:
+        return "Fail"
+    elif "dot_mixed" in classes:
+        return "Mixed"
+    else:
+        return "Error"
+
+
+
 def parse_numeric(val: Any) -> Optional[float]:
     """Extract first numeric value from a cell (handles units)."""
     if val is None:
@@ -158,7 +182,8 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
             )
 
         # ---------------- Criteria → Status ----------------
-        status = "Unknown"
+        #status = "Unknown"
+        status = _extract_dot_status(li_tag)
 
         crit_tbl = h2.find_next("table", class_="criteria")
         if crit_tbl:
@@ -169,6 +194,8 @@ def parse_report(html_path: str) -> Tuple[pd.DataFrame, Dict[str, Any]]:
                     status = "Pass"
                 elif "failed" in cls:
                     status = "Fail"
+                elif "dot_mixed" in classes:
+                    status = "Mixed"
                 else:
                     status = "Error"
 
